@@ -1,0 +1,28 @@
+## Stage 1 - Build wheels from requirements ##
+FROM public.ecr.aws/lambda/python:3.13 AS builder
+
+# Copy requirements file
+COPY requirements .
+
+# Upgrade pip and build wheels
+RUN pip install --upgrade pip \
+    && pip wheel --no-cache-dir --wheel-dir /wheels -r requirements
+
+
+## Stage 2 - Create Lambda layer ##
+FROM public.ecr.aws/lambda/python:3.13
+
+# Work in a temporary directory
+WORKDIR /tmp
+
+# Copy built wheels from builder
+COPY --from=builder /wheels wheels
+
+# Install wheels into the Lambda layer directory
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir --target python/lib/python3.13/site-packages wheels/* \
+    && rm -rf wheels
+
+# Create the zip file
+RUN dnf install -y --nobest zip && dnf clean all
+RUN zip -r python-lambda-layer.zip python/
